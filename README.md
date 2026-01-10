@@ -62,24 +62,92 @@ Transform step removes:
 - Negative life expectancy values
 - Duplicate country/year records
 
-## Testing
+## Testing and Debugging
 
-Run unit tests:
-```bash
-python run_tests.py
-```
+### Option 1: Quick Smoke Test (No Database Required)
 
-Test extract/transform without database:
+Tests extraction and transformation with real WHO API data:
+
 ```bash
 python test_pipeline.py
 ```
 
-All tests use mocks where needed and validate:
-- API retry logic with exponential backoff
-- Pagination and checkpoint resume
-- Data validation rules
-- Type conversions
-- End-to-end data flow
+**What it does:**
+- Fetches 50 records from WHO API
+- Runs full transformation pipeline
+- Shows sample input/output
+- Verifies data structure
+
+**Use this to:** Quickly verify the pipeline works without database setup.
+
+### Option 2: Full Unit Test Suite (No Database Required)
+
+Runs all 14 unit and integration tests:
+
+```bash
+python run_tests.py
+```
+
+**What it tests:**
+- **Extraction (5 tests)**
+  - HTTP retry with exponential backoff
+  - Pagination stops at incomplete pages
+  - Resume from checkpoint functionality
+  - Maximum retries exhaustion handling
+- **Transformation (7 tests)**
+  - Empty input handling
+  - Null value removal
+  - Year range validation (1900-2030)
+  - Negative value filtering
+  - Duplicate record removal
+  - Type conversions
+  - Basic transformation correctness
+- **Integration (2 tests)**
+  - End-to-end extract → transform flow
+  - Data structure compatibility between stages
+
+**Output:** 14 tests passing, ~0.05s runtime
+
+### Option 3: Full Pipeline Test (Database Required)
+
+Complete ETL pipeline with PostgreSQL:
+
+```bash
+# Setup database
+createdb who_etl
+python setup_db.py
+
+# Run pipeline
+python main.py
+```
+
+**What it does:**
+- Extracts all pages from WHO API (paginated)
+- Transforms and validates data
+- Loads into PostgreSQL with upserts
+- Saves checkpoints for resume capability
+
+**Verify results:**
+```sql
+-- Count loaded records
+SELECT COUNT(*) FROM health_indicators;
+
+-- Sample data
+SELECT country_code, year, value
+FROM health_indicators
+LIMIT 10;
+```
+
+### Debugging Tips
+
+**Check logs:** Pipeline outputs detailed logging at INFO level
+
+**Resume after failure:** If pipeline crashes, just run `python main.py` again - it resumes from last checkpoint
+
+**Clear checkpoint:** Delete checkpoint to start fresh:
+```sql
+UPDATE pipeline_metadata SET last_checkpoint = NULL WHERE pipeline_name = 'who_etl';
+```
 
 ## Improvements for Production
 
