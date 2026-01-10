@@ -157,6 +157,20 @@ UPDATE pipeline_metadata SET last_checkpoint = NULL WHERE pipeline_name = 'who_e
 - Data quality metrics
 - More granular checkpointing
 
+## Design Trade-offs
+
+**Full refresh vs incremental**: Chose full data reload for simplicity and correctness. Incremental adds complexity around change detection and requires tracking last sync timestamps. For a 3-hour exercise with ~50K records, full refresh is acceptable.
+
+**Pandas vs manual parsing**: Used pandas for transformations because it handles type conversions and missing data cleanly. Trade-off is memory overhead, but acceptable for datasets under 1GB.
+
+**Checkpoint granularity**: Checkpoint per page (100 records) rather than per record. Balances resume capability with database writes. Finer granularity would slow down the pipeline.
+
+**Single indicator focus**: Extracted only life expectancy data instead of all WHO indicators. Keeps the solution focused and demonstrates the pattern without over-engineering.
+
+**Upsert strategy**: Used ON CONFLICT for idempotency instead of delete-then-insert. Preserves fetched_at history and is safer for concurrent access, though slightly more complex SQL.
+
+**Synchronous execution**: Single-threaded pipeline instead of parallel page fetching. Simpler to reason about, respects API rate limits, and sufficient for the data volume.
+
 ## Verifying Results
 
 ```sql
