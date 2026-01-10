@@ -1,72 +1,104 @@
 # WHO Health Data ETL Pipeline
 
-Simple ETL pipeline that pulls life expectancy data from WHO's API and loads it into Postgres.
+ETL pipeline that extracts life expectancy data from WHO's GHO API and loads it into PostgreSQL.
 
-## Setup
-
-You'll need Python 3.8+ and PostgreSQL running locally.
+## Quick Start
 
 ```bash
-# install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# create the database
-psql -U postgres -c "CREATE DATABASE who_etl;"
-psql -U postgres -d who_etl -f schema.sql
+# Test without database (recommended first step)
+python test_pipeline.py
 
-# configure your db connection
+# Set up database
+createdb who_etl
+python setup_db.py
+
+# Configure connection (optional - defaults work for local postgres)
 cp .env.example .env
-# then edit .env with your postgres password
 
-# run it
+# Run the pipeline
 python main.py
 ```
 
-## Project structure
+## Project Structure
 
-- `extract.py` - pulls data from WHO API, handles pagination and retries
-- `transform.py` - cleans up the raw data, filters out bad records
-- `load.py` - inserts into postgres, handles duplicates with upsert
-- `main.py` - runs the whole thing
-- `config.py` - loads env vars
-- `schema.sql` - database tables
+```
+├── config.py              # Configuration and environment variables
+├── extract.py             # API data extraction with pagination
+├── transform.py           # Data validation and cleaning
+├── load.py               # PostgreSQL loading with upserts
+├── main.py               # Pipeline orchestrator
+├── schema.sql            # Database schema
+├── setup_db.py           # Database setup script
+├── test_pipeline.py      # Quick smoke test
+├── run_tests.py          # Test runner
+├── utils/                # Reusable utility modules
+│   ├── http.py          # HTTP retry logic
+│   ├── checkpoint.py    # Checkpoint management class
+│   └── validation.py    # Data validation helpers
+└── tests/
+    ├── test_extract.py      # Unit tests for extraction
+    ├── test_transform.py    # Unit tests for transformation
+    └── test_integration.py  # Integration tests
+```
 
-## Why I built it this way
+## Design Decisions
 
-I picked life expectancy data (WHOSIS_000001) because it's one of the cleaner datasets in the WHO API - good global coverage, consistent structure, easy to verify.
+**Data Source**: Chose life expectancy indicator (WHOSIS_000001) for its clean structure and global coverage.
 
-The pipeline saves checkpoints after each page of data it fetches. So if the API times out or something crashes, you can just run it again and it picks up where it left off instead of starting over.
+**Checkpoint/Resume**: Pipeline saves progress after each API page. If it crashes, rerun to resume from last checkpoint instead of starting over.
 
-For loading, I use postgres upsert (ON CONFLICT) so running the pipeline twice doesn't create duplicates - it just updates existing records.
+**Idempotency**: Uses PostgreSQL upserts (ON CONFLICT) so reruns update existing data rather than creating duplicates.
 
-## Data validation
+**Retry Logic**: Exponential backoff for transient API failures (network issues, rate limits).
 
-The transform step filters out:
-- missing country codes or years (unusable)
-- years before 1900 or after 2030 (probably data errors)
-- negative values (doesn't make sense for life expectancy)
-- duplicate country/year combos
+## Data Validation
+
+Transform step removes:
+- Null country codes or years
+- Years outside 1900-2030 range
+- Negative life expectancy values
+- Duplicate country/year records
 
 ## Testing
 
-I tested this manually - ran it a few times, checked the data in postgres, killed it mid-run to make sure resume works. Didn't write unit tests due to time but the transform logic would be easy to test with some sample data.
+Run unit tests:
+```bash
+python run_tests.py
+```
 
-## What I'd do with more time
+Test extract/transform without database:
+```bash
+python test_pipeline.py
+```
 
-- only fetch new data instead of everything each time
-- add some actual tests
-- maybe pull multiple indicators, not just life expectancy
-- better error notifications
+All tests use mocks where needed and validate:
+- API retry logic with exponential backoff
+- Pagination and checkpoint resume
+- Data validation rules
+- Type conversions
+- End-to-end data flow
 
-## Checking the results
+## Improvements for Production
+
+- Incremental loads (fetch only new data since last run)
+- Multiple indicator support
+- Alerting on failures
+- Data quality metrics
+- More granular checkpointing
+
+## Verifying Results
 
 ```sql
--- see what got loaded
+-- Sample the loaded data
 SELECT country_code, year, value
 FROM health_indicators
 ORDER BY country_code, year
 LIMIT 20;
 
--- check pipeline status
-SELECT * FROM pipeline_metadata;
+-- Check pipeline status
+SELECT pipeline_name, status, records_processed, last_run_at
+FROM pipeline_metadata;
 ```
