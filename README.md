@@ -18,6 +18,9 @@ python setup_db.py
 # Configure connection (optional - defaults work for local postgres)
 cp .env.example .env
 
+# Verify database connection
+python verify_db.py
+
 # Run the pipeline
 python main.py
 ```
@@ -32,6 +35,7 @@ python main.py
 ├── main.py               # Pipeline orchestrator
 ├── schema.sql            # Database schema
 ├── setup_db.py           # Database setup script
+├── verify_db.py          # Database connection checker
 ├── test_pipeline.py      # Quick smoke test
 ├── run_tests.py          # Test runner
 ├── utils/                # Reusable utility modules
@@ -149,27 +153,29 @@ LIMIT 10;
 UPDATE pipeline_metadata SET last_checkpoint = NULL WHERE pipeline_name = 'who_etl';
 ```
 
-## Improvements for Production
+## What I'd Add for Production
 
-- Incremental loads (fetch only new data since last run)
-- Multiple indicator support
-- Alerting on failures
-- Data quality metrics
-- More granular checkpointing
+- Incremental loads - only fetch new data since last run instead of everything
+- Support for multiple health indicators, not just life expectancy
+- Alerts when the pipeline fails (Slack, email, PagerDuty)
+- Data quality checks - track completeness, outliers, unexpected patterns
+- More detailed checkpoints if processing really large datasets
 
 ## Design Trade-offs
 
-**Full refresh vs incremental**: Chose full data reload for simplicity and correctness. Incremental adds complexity around change detection and requires tracking last sync timestamps. For a 3-hour exercise with ~50K records, full refresh is acceptable.
+I picked life expectancy as the indicator because the data is clean and easy to verify. Could expand to multiple indicators, but wanted to keep things focused for now.
 
-**Pandas vs manual parsing**: Used pandas for transformations because it handles type conversions and missing data cleanly. Trade-off is memory overhead, but acceptable for datasets under 1GB.
+The pipeline does a full refresh each time instead of incremental loads. Full refresh is simpler - you don't need to track what changed since the last run. For ~50K records, it runs fast enough that the complexity of incremental loading isn't worth it yet. In production with larger datasets, I'd add incremental loading to save time.
 
-**Checkpoint granularity**: Checkpoint per page (100 records) rather than per record. Balances resume capability with database writes. Finer granularity would slow down the pipeline.
+I went with pandas for data transformation. It makes type conversions and handling missing values straightforward. The memory overhead isn't a concern for datasets under 1GB, but if we were processing much larger files, I'd reconsider.
 
-**Single indicator focus**: Extracted only life expectancy data instead of all WHO indicators. Keeps the solution focused and demonstrates the pattern without over-engineering.
+Checkpoints save after each page (100 records) instead of after every single record. This balances the ability to resume if something crashes with not hammering the database with constant writes. Saving after every record would slow things down unnecessarily.
 
-**Upsert strategy**: Used ON CONFLICT for idempotency instead of delete-then-insert. Preserves fetched_at history and is safer for concurrent access, though slightly more complex SQL.
+For the upsert strategy, I used PostgreSQL's ON CONFLICT instead of deleting and reinserting. This preserves the fetched_at timestamp and is safer if multiple processes access the data. The SQL is a bit more complex, but the benefits are worth it.
 
-**Synchronous execution**: Single-threaded pipeline instead of parallel page fetching. Simpler to reason about, respects API rate limits, and sufficient for the data volume.
+The pipeline runs synchronously - one page at a time. I could fetch multiple pages in parallel, but that adds complexity and might hit API rate limits. For the data volume here, single-threaded is plenty fast and easier to debug.
+
+No alerting or monitoring hooks yet. In production, I'd integrate with something like PagerDuty or Slack to get notified when runs fail.
 
 ## Verifying Results
 
