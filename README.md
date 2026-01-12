@@ -163,19 +163,19 @@ UPDATE pipeline_metadata SET last_checkpoint = NULL WHERE pipeline_name = 'who_e
 
 ## Design Trade-offs
 
-I picked life expectancy as the indicator because the data is clean and easy to verify. Could expand to multiple indicators, but wanted to keep things focused for now.
+Stuck with life expectancy data since it's clean and straightforward to work with. The WHO has tons of other health indicators, but one is enough to show how the pipeline works.
 
-The pipeline does a full refresh each time instead of incremental loads. Full refresh is simpler - you don't need to track what changed since the last run. For ~50K records, it runs fast enough that the complexity of incremental loading isn't worth it yet. In production with larger datasets, I'd add incremental loading to save time.
+Everything gets reloaded each time the pipeline runs. Yeah, incremental updates would be smarter for production, but with only 50K records the full refresh takes seconds. Not worth the extra complexity of tracking what changed.
 
-I went with pandas for data transformation. It makes type conversions and handling missing values straightforward. The memory overhead isn't a concern for datasets under 1GB, but if we were processing much larger files, I'd reconsider.
+Pandas handles the transformations. Some people avoid it for ETL because of memory usage, but we're well under a gig of data so it's fine. The built-in type conversions and missing data handling save a lot of time.
 
-Checkpoints save after each page (100 records) instead of after every single record. This balances the ability to resume if something crashes with not hammering the database with constant writes. Saving after every record would slow things down unnecessarily.
+Checkpoints happen after each 100-record page. Could checkpoint more often but that means more database writes for minimal benefit. Could checkpoint less often but then you lose more progress if something breaks.
 
-For the upsert strategy, I used PostgreSQL's ON CONFLICT instead of deleting and reinserting. This preserves the fetched_at timestamp and is safer if multiple processes access the data. The SQL is a bit more complex, but the benefits are worth it.
+Using upserts (INSERT ... ON CONFLICT) instead of delete-and-reload. Takes a few more lines of SQL but means we don't lose the original fetch timestamps and it's safer if someone else is reading the data.
 
-The pipeline runs synchronously - one page at a time. I could fetch multiple pages in parallel, but that adds complexity and might hit API rate limits. For the data volume here, single-threaded is plenty fast and easier to debug.
+Single-threaded execution. Could parallelize the API calls but that's asking for rate limit issues and makes debugging harder. Current speed is fine for the data volume.
 
-No alerting or monitoring hooks yet. In production, I'd integrate with something like PagerDuty or Slack to get notified when runs fail.
+No monitoring or alerts hooked up. Would definitely want Slack notifications or something similar before running this in production.
 
 ## Verifying Results
 
