@@ -183,6 +183,7 @@ UPDATE pipeline_metadata SET last_checkpoint = NULL WHERE pipeline_name = 'who_e
 - Alerts when the pipeline fails (Slack, email, PagerDuty)
 - Data quality checks - track completeness, outliers, unexpected patterns
 - More detailed checkpoints if processing really large datasets
+- Grafana dashboards for data visualization - charts showing trends, country comparisons, and data completeness metrics
 
 ## Design Trade-offs
 
@@ -199,6 +200,14 @@ Using upserts (INSERT ... ON CONFLICT) instead of delete-and-reload. Takes a few
 Single-threaded execution. Could parallelize the API calls but that's asking for rate limit issues and makes debugging harder. Current speed is fine for the data volume.
 
 No monitoring or alerts hooked up. Would definitely want Slack notifications or something similar before running this in production.
+
+## Results
+
+After running the pipeline, you'll have health indicator data loaded into PostgreSQL:
+
+![Database View](screenshots/database_view.png)
+
+The pipeline successfully loaded 1,927 life expectancy records from WHO covering multiple countries and years.
 
 ## Verifying Results
 

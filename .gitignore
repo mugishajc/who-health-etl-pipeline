@@ -28,3 +28,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Tool folders
+.claude/
