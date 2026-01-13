@@ -19,7 +19,7 @@ python setup_db.py
 cp .env.example .env
 
 # Verify database connection
-python verify_db.py
+python scripts/verify_db.py
 
 # Run the pipeline
 python main.py
@@ -35,9 +35,14 @@ python main.py
 ├── main.py               # Pipeline orchestrator
 ├── schema.sql            # Database schema
 ├── setup_db.py           # Database setup script
-├── verify_db.py          # Database connection checker
 ├── test_pipeline.py      # Quick smoke test
 ├── run_tests.py          # Test runner
+├── scripts/              # Database helper scripts
+│   ├── verify_db.py     # Connection checker
+│   ├── create_db.py     # Database creation
+│   ├── check_data.py    # Query loaded data
+│   └── test_db_query.py # Test queries
+├── screenshots/          # Project screenshots and demos
 ├── utils/                # Reusable utility modules
 │   ├── http.py          # HTTP retry logic
 │   ├── checkpoint.py    # Checkpoint management class
@@ -140,6 +145,24 @@ SELECT COUNT(*) FROM health_indicators;
 SELECT country_code, year, value
 FROM health_indicators
 LIMIT 10;
+```
+
+### Helper Scripts
+
+Several utility scripts are available in the `scripts/` directory:
+
+```bash
+# Check database connection and view data
+python scripts/verify_db.py
+
+# Query and display loaded records
+python scripts/check_data.py
+
+# Create database if it doesn't exist
+python scripts/create_db.py
+
+# Test basic queries
+python scripts/test_db_query.py
 ```
 
 ### Debugging Tips
